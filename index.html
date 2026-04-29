@@ -31,9 +31,13 @@
   window._fbOnValue = onValue;
 
   // start listening once Firebase is ready
-  window.addEventListener('DOMContentLoaded', () => {
-    window.initFirebase();
-  });
+  // Init Firebase - handle both cases: DOM ready or already loaded
+  if(document.readyState === 'loading'){
+    window.addEventListener('DOMContentLoaded', () => window.initFirebase && window.initFirebase());
+  } else {
+    // DOM already ready, init after a tiny delay to ensure global functions are defined
+    setTimeout(() => window.initFirebase && window.initFirebase(), 100);
+  }
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;900&display=swap');
@@ -405,10 +409,24 @@ const HANDLE_S={
 };
 
 function persist(){
-  // Save to Firebase
+  // Save to Firebase - convert records array to object keyed by id
   const dbRef = window._fbRef(window._fbDb, 'records');
-  window._fbSet(dbRef, records.length ? Object.fromEntries(records.map(r => [r.id, r])) : null);
-  // Also keep local copy for instant UI
+  if(records.length){
+    // Convert arrangements array to object for Firebase storage
+    const data = {};
+    records.forEach(r => {
+      const rec = {...r};
+      if(Array.isArray(rec.arrangements)){
+        const arrObj = {};
+        rec.arrangements.forEach(a => { arrObj[a.id] = a; });
+        rec.arrangements = arrObj;
+      }
+      data[rec.id] = rec;
+    });
+    window._fbSet(dbRef, data);
+  } else {
+    window._fbSet(dbRef, null);
+  }
 }
 
 // ─── unit label & total ───
@@ -505,7 +523,7 @@ function renderOverview(){
       p.arrCount?`${p.arrCount}筆已安排`:''
     ].filter(Boolean).join('・')||'全部完成';
     return `
-    <div class="pc" onclick="goProd('${p.name}')">
+    <div class="pc">
       <div class="pc-top">
         <div><div class="pc-name">${p.name}</div><div class="pc-sub">${sub}</div></div>
         <div class="kpi">
@@ -522,6 +540,18 @@ function renderOverview(){
       </div>
       ${issues?`<div class="chip-row">${issues}</div>`:''}
       ${expHtml}
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        <button onclick="goProd('${p.name}')"
+          style="flex:1;padding:7px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;
+                 font-size:.75rem;font-family:inherit;cursor:pointer;font-weight:600;color:var(--muted);">
+          📋 查看紀錄
+        </button>
+        <button onclick="openModalWithProduct('${p.name}')"
+          style="flex:1;padding:7px;background:var(--red-l);border:1.5px solid var(--red);border-radius:8px;
+                 font-size:.75rem;font-family:inherit;cursor:pointer;font-weight:600;color:var(--red);">
+          ＋ 新增同品項批次
+        </button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -940,7 +970,10 @@ function saveRecord(){
   persist();
   document.getElementById('ov').classList.remove('show');
   editId=null;
-  renderOverview(); renderPending();
+  // Render immediately with local data for instant feedback
+  // Firebase onValue will also re-render when it confirms the write
+  renderOverview();
+  renderPending();
 }
 
 // ─── custom issue tags ───
@@ -995,6 +1028,14 @@ function cancelArr(rid, aid){
   if(a) a.status = 'cancelled';  // soft-delete: keep record but exclude from calcArranged
   persist();
   renderArranged(); renderPending(); renderOverview();
+}
+
+// ─── open modal pre-filled with product name ───
+function openModalWithProduct(productName){
+  openModal();
+  setTimeout(() => {
+    document.getElementById('f-prod').value = productName;
+  }, 50);
 }
 
 // ── Firebase init & realtime sync ──
