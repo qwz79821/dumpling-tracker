@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>水餃待處理管理</title>
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  // ── 填入你的 Firebase config ──
+  const firebaseConfig = {
+    apiKey: "AIzaSyC-Pn8F0Q4ZAhUpmlyxxkCKcq0470nTHwg",
+    authDomain: "dumpling-tracker.firebaseapp.com",
+    databaseURL: "https://dumpling-tracker-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "dumpling-tracker",
+    storageBucket: "dumpling-tracker.firebasestorage.app",
+    messagingSenderId: "662897270829",
+    appId: "1:662897270829:web:8b91bb019dff655c3898a4"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  // expose to global scope for non-module script below
+  window._fbDb = db;
+  window._fbRef = ref;
+  window._fbSet = set;
+  window._fbRemove = remove;
+  window._fbOnValue = onValue;
+
+  // start listening once Firebase is ready
+  window.addEventListener('DOMContentLoaded', () => {
+    window.initFirebase();
+  });
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;900&display=swap');
+
+:root {
+  --bg:#f0ede6; --card:#fff; --border:#e0dbd2; --text:#1e1c1a; --muted:#8c8680;
+  --red:#c0392b;   --red-l:#fdf0ef;
+  --green:#1e8449; --green-l:#eaf6ee;
+  --ora:#d35400;   --ora-l:#fef2ea;
+  --blu:#1a6fa8;   --blu-l:#e8f2fa;
+  --yel:#b7770d;   --yel-l:#fdf6e3;
+  --pur:#7d3c98;   --pur-l:#f5eef8;
+  --tea:#148a7a;   --tea-l:#e4f5f3;
+  --amb:#9a6200;   --amb-l:#fef8e7;
+  --shadow:0 2px 12px rgba(0,0,0,.07); --r:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+/* ── HEADER ── */
+.hdr{background:var(--red);padding:14px 16px 0;position:sticky;top:0;z-index:50;}
+.hdr-title{color:#fff;font-size:1.05rem;font-weight:900;letter-spacing:.06em;margin-bottom:12px;}
+.tabs{display:flex;}
+.tab{flex:1;padding:9px 2px;background:transparent;border:none;color:rgba(255,255,255,.6);
+  font-size:.76rem;font-family:inherit;font-weight:600;cursor:pointer;
+  border-bottom:3px solid transparent;transition:all .2s;}
+.tab.on{color:#fff;border-bottom-color:#fff;}
+
+.page{display:none;padding:14px 14px 90px;}
+.page.on{display:block;}
+
+/* ── OVERVIEW CARD ── */
+.pc{background:var(--card);border-radius:var(--r);padding:15px;margin-bottom:12px;
+  box-shadow:var(--shadow);cursor:pointer;}
+.pc:active{opacity:.9;}
+.pc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+.pc-name{font-size:1rem;font-weight:700;}
+.pc-sub{font-size:.68rem;color:var(--muted);margin-top:3px;}
+.kpi{text-align:right;}
+.kpi-n{font-size:1.4rem;font-weight:900;line-height:1;}
+.kpi-l{font-size:.6rem;color:var(--muted);margin-top:2px;}
+
+.prog{background:var(--bg);border-radius:100px;height:7px;overflow:hidden;margin-bottom:10px;}
+.prog-b{height:100%;border-radius:100px;transition:width .4s;}
+.pb-g{background:var(--green);} .pb-m{background:var(--ora);} .pb-d{background:var(--muted);}
+
+.pc-stats{display:flex;gap:6px;margin-bottom:8px;}
+.pst{flex:1;background:var(--bg);border-radius:8px;padding:7px 4px;text-align:center;}
+.pst-n{font-size:.85rem;font-weight:700;}
+.pst-l{font-size:.58rem;color:var(--muted);margin-top:1px;}
+.pst.t .pst-n{color:var(--text);}
+.pst.a .pst-n{color:var(--amb);}
+.pst.d .pst-n{color:var(--green);}
+.pst.r .pst-n{color:var(--red);}
+
+.chip-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.chip{font-size:.67rem;padding:2px 8px;border-radius:10px;font-weight:600;display:inline-block;}
+.exp-warn{font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;margin-top:6px;display:inline-block;}
+.eo{background:var(--green-l);color:var(--green);}
+.es{background:var(--yel-l);color:var(--yel);}
+.ex{background:var(--red-l);color:var(--red);}
+
+/* ── FAB ── */
+.fab{position:fixed;bottom:22px;right:18px;background:var(--red);color:#fff;border:none;
+  border-radius:50px;padding:13px 20px;font-size:.9rem;font-family:inherit;font-weight:700;
+  cursor:pointer;box-shadow:0 6px 20px rgba(192,57,43,.4);display:flex;align-items:center;
+  gap:7px;z-index:40;}
+.fab:active{transform:scale(.97);}
+
+/* ── TOOLBAR ── */
+.toolbar{display:flex;gap:6px;margin-bottom:12px;align-items:center;flex-wrap:wrap;}
+.toolbar select{flex:1;min-width:0;padding:8px 10px;border:2px solid var(--border);border-radius:8px;
+  font-size:.82rem;font-family:inherit;background:#fff;-webkit-appearance:none;}
+.fsb{padding:7px 9px;border:2px solid var(--border);background:#fff;border-radius:8px;
+  font-size:.69rem;font-family:inherit;cursor:pointer;font-weight:600;color:var(--muted);white-space:nowrap;}
+.fsb.on{border-color:var(--red);color:var(--red);background:var(--red-l);}
+
+/* ── PARENT RECORD CARD ── */
+.rc{background:var(--card);border-radius:12px;padding:13px;margin-bottom:10px;
+  box-shadow:var(--shadow);border-left:4px solid var(--border);}
+.rc.pend{border-left-color:var(--ora);}
+.rc.done{border-left-color:var(--green);opacity:.78;}
+
+.rc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.rc-name{font-weight:700;font-size:.95rem;}
+.rc-btns{display:flex;gap:4px;}
+.ibt{background:var(--bg);border:none;border-radius:7px;width:30px;height:30px;
+  cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center;}
+
+.badge-row{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;}
+.badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:10px;font-size:.67rem;font-weight:600;}
+
+.qty-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
+.qc{font-size:.76rem;color:var(--muted);background:var(--bg);padding:3px 8px;border-radius:6px;}
+.qc strong{color:var(--text);}
+
+/* remaining bar inside parent */
+.remain-bar{background:var(--ora-l);border:1.5px solid #f5c0a0;border-radius:10px;padding:9px 12px;margin-bottom:8px;}
+.remain-nums{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.rn{font-size:.78rem;font-weight:700;}
+.rn.total{color:var(--text);}
+.rn.arr{color:var(--amb);}
+.rn.left{color:var(--red);}
+.rn.done{color:var(--green);}
+.rn-sep{color:var(--muted);font-size:.7rem;}
+
+/* add arrangement inline */
+.add-arr-btn{width:100%;padding:8px;background:transparent;border:1.5px dashed var(--amb);
+  border-radius:8px;color:var(--amb);font-size:.8rem;font-family:inherit;font-weight:700;
+  cursor:pointer;margin-top:6px;}
+.add-arr-btn:active{background:var(--amb-l);}
+
+/* mini arrangement form */
+.arr-form{background:var(--amb-l);border:1.5px solid #e8c97a;border-radius:10px;
+  padding:11px 12px;margin-top:8px;}
+.arr-form-title{font-size:.72rem;font-weight:700;color:var(--amb);margin-bottom:10px;}
+.arr-frow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.arr-fld{display:flex;flex-direction:column;gap:3px;}
+.arr-fld label{font-size:.68rem;font-weight:600;color:var(--muted);}
+.arr-fld input,.arr-fld select,.arr-fld textarea{
+  padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;
+  font-size:.85rem;font-family:inherit;background:#fff;-webkit-appearance:none;}
+.arr-fld input:focus,.arr-fld select:focus,.arr-fld textarea:focus{outline:none;border-color:var(--amb);}
+.arr-fld textarea{resize:vertical;min-height:50px;font-size:.8rem;}
+.arr-tog-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
+.arr-tog{padding:6px 12px;border:1.5px solid var(--border);background:#fff;border-radius:16px;
+  font-size:.78rem;font-family:inherit;cursor:pointer;font-weight:500;}
+.arr-tog.sel{border-color:var(--amb);background:var(--amb);color:#fff;}
+.arr-confirm-btn{width:100%;padding:9px;background:var(--amb);color:#fff;border:none;
+  border-radius:8px;font-size:.82rem;font-family:inherit;font-weight:700;cursor:pointer;}
+
+/* ── ARRANGEMENT CARDS (sub) ── */
+.sub-rc{background:var(--card);border-radius:11px;padding:12px;margin-bottom:9px;
+  box-shadow:var(--shadow);border-left:4px solid var(--amb);}
+.sub-rc.done{border-left-color:var(--green);opacity:.78;}
+.sub-rc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;}
+.sub-rc-prod{font-weight:700;font-size:.9rem;}
+.sub-info{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;}
+.sub-done-btn{width:100%;padding:8px;background:var(--green);color:#fff;border:none;
+  border-radius:8px;font-size:.8rem;font-family:inherit;font-weight:700;cursor:pointer;margin-top:6px;}
+.sub-reopen-btn{width:100%;padding:8px;background:var(--bg);color:var(--muted);border:1.5px solid var(--border);
+  border-radius:8px;font-size:.78rem;font-family:inherit;font-weight:600;cursor:pointer;margin-top:6px;}
+.sub-note{font-size:.74rem;color:var(--muted);background:var(--bg);padding:5px 9px;border-radius:6px;margin-top:5px;}
+.sub-date{font-size:.65rem;color:var(--muted);margin-top:5px;}
+
+/* ── MODAL ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;
+  align-items:flex-end;justify-content:center;}
+.overlay.show{display:flex;}
+.sheet{background:var(--card);border-radius:20px 20px 0 0;padding:22px 16px 32px;
+  width:100%;max-width:600px;max-height:93vh;overflow-y:auto;animation:up .28s ease;}
+@keyframes up{from{transform:translateY(100%);}to{transform:translateY(0);}}
+.sh-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+.sh-title{font-size:1.05rem;font-weight:700;color:var(--red);}
+.x-btn{background:var(--bg);border:none;border-radius:50%;width:32px;height:32px;font-size:1rem;cursor:pointer;}
+
+.fsec{margin-bottom:16px;}
+.flbl{font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;}
+.tog-row{display:flex;flex-wrap:wrap;gap:6px;}
+.tog{padding:7px 14px;border:2px solid var(--border);background:#fff;border-radius:20px;
+  font-size:.82rem;font-family:inherit;cursor:pointer;font-weight:500;}
+.tog.sel{border-color:var(--red);background:var(--red);color:#fff;}
+
+.type-tabs{display:flex;background:var(--bg);border-radius:10px;padding:3px;gap:2px;}
+.type-tab{flex:1;padding:9px;border:none;background:transparent;border-radius:8px;
+  font-size:.86rem;font-family:inherit;font-weight:600;cursor:pointer;color:var(--muted);transition:all .2s;}
+.type-tab.act{background:#fff;color:var(--red);box-shadow:0 2px 6px rgba(0,0,0,.1);}
+
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.fld{display:flex;flex-direction:column;gap:4px;}
+.fld label{font-size:.7rem;font-weight:600;color:var(--muted);}
+.fld input,.fld textarea{padding:9px 11px;border:2px solid var(--border);border-radius:8px;
+  font-size:.88rem;font-family:inherit;background:#fff;-webkit-appearance:none;}
+.fld input:focus,.fld textarea:focus{outline:none;border-color:var(--red);}
+.fld textarea{resize:vertical;min-height:60px;}
+.cbox{background:var(--blu-l);border:1.5px solid #aaced8;border-radius:8px;padding:9px 12px;
+  font-size:.83rem;color:var(--blu);font-weight:700;display:flex;align-items:center;}
+
+.switch{position:relative;width:44px;height:24px;flex-shrink:0;}
+.switch input{opacity:0;width:0;height:0;}
+.slider{position:absolute;inset:0;background:var(--border);border-radius:24px;transition:.2s;cursor:pointer;}
+.slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;
+  background:#fff;border-radius:50%;transition:.2s;}
+input:checked+.slider{background:var(--red);}
+input:checked+.slider:before{transform:translateX(20px);}
+
+.sdiv{border:none;border-top:2px dashed var(--border);margin:14px 0;}
+.save-btn{width:100%;padding:13px;background:var(--red);color:#fff;border:none;
+  border-radius:10px;font-size:.95rem;font-family:inherit;font-weight:700;cursor:pointer;margin-top:4px;}
+.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:.88rem;}
+.empty-ico{font-size:2.4rem;margin-bottom:10px;}
+.note-txt{font-size:.76rem;color:var(--muted);margin-top:8px;background:var(--bg);padding:5px 9px;border-radius:6px;}
+.rc-date{font-size:.65rem;color:var(--muted);margin-top:6px;}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-title">🥟 水餃待處理管理 <span id="sync-dot" style="font-size:.65rem;opacity:.7;font-weight:400;">● 同步中</span></div>
+  <div class="tabs">
+    <button class="tab on"  onclick="goTab('overview',this)">品項總覽</button>
+    <button class="tab"     onclick="goTab('pending',this)">待處理</button>
+    <button class="tab"     onclick="goTab('arranged',this)">已安排</button>
+    <button class="tab"     onclick="goTab('done',this)">已完成</button>
+  </div>
+</div>
+
+<!-- OVERVIEW -->
+<div id="page-overview" class="page on"><div id="plist"></div></div>
+
+<!-- PENDING -->
+<div id="page-pending" class="page">
+  <div class="toolbar">
+    <select id="fp-pend" onchange="renderPending()"><option value="">全部品項</option></select>
+  </div>
+  <div id="pend-list"></div>
+</div>
+
+<!-- ARRANGED -->
+<div id="page-arranged" class="page">
+  <div class="toolbar">
+    <select id="fp-arr" onchange="renderArranged()"><option value="">全部品項</option></select>
+  </div>
+  <div id="arr-list"></div>
+</div>
+
+<!-- DONE -->
+<div id="page-done" class="page">
+  <div class="toolbar">
+    <select id="fp-done" onchange="renderDone()"><option value="">全部品項</option></select>
+  </div>
+  <div id="done-list"></div>
+</div>
+
+<button class="fab" onclick="openModal()">＋ 新增品項</button>
+
+<!-- MODAL: new/edit parent record -->
+<div class="overlay" id="ov" onclick="closeOv(event)">
+<div class="sheet">
+  <div class="sh-head">
+    <div class="sh-title" id="sh-title">新增待處理品項</div>
+    <button class="x-btn" onclick="closeOv()">✕</button>
+  </div>
+
+  <div class="fsec">
+    <div class="flbl">產品名稱</div>
+    <div class="fld">
+      <input id="f-prod" type="text" placeholder="里仁水晶餃…" list="dl-prod" autocomplete="off">
+      <datalist id="dl-prod"></datalist>
+    </div>
+  </div>
+
+  <div class="fsec">
+    <div class="flbl">產品狀況</div>
+    <div class="tog-row" id="tg-issue">
+      <button class="tog" onclick="sel1('tg-issue',this)">不足重</button>
+      <button class="tog" onclick="sel1('tg-issue',this)">NG</button>
+      <button class="tog" onclick="sel1('tg-issue',this)">上頂白</button>
+      <button class="tog" onclick="sel1('tg-issue',this)">退貨不良</button>
+      <button class="tog" onclick="sel1('tg-issue',this)">新品測試</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
+      <input id="f-custom-issue" type="text" placeholder="自訂狀況…"
+        style="flex:1;padding:7px 11px;border:1.5px dashed var(--border);border-radius:20px;
+               font-size:.82rem;font-family:inherit;background:#fff;outline:none;"
+        onkeydown="if(event.key==='Enter'){addCustomIssue();event.preventDefault();}">
+      <button onclick="addCustomIssue()"
+        style="padding:7px 14px;background:var(--bg);border:1.5px dashed var(--border);
+               border-radius:20px;font-size:.82rem;font-family:inherit;cursor:pointer;
+               font-weight:600;color:var(--muted);white-space:nowrap;">＋ 新增</button>
+    </div>
+  </div>
+
+  <div class="fsec">
+    <div class="flbl">效期</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <label class="switch"><input type="checkbox" id="has-exp" onchange="toggleExp()"><span class="slider"></span></label>
+      <span id="exp-lbl" style="font-size:.85rem;font-weight:600;">無效期</span>
+    </div>
+    <div id="exp-wrap" style="display:none;">
+      <div class="fld"><label>效期日期</label><input type="date" id="f-exp"></div>
+    </div>
+  </div>
+
+  <div class="fsec">
+    <div class="flbl">包裝類型</div>
+    <div class="type-tabs">
+      <button class="type-tab act" id="tab-bulk" onclick="swType('bulk')">散裝</button>
+      <button class="type-tab"     id="tab-pkg"  onclick="swType('pkg')">一般包裝</button>
+    </div>
+  </div>
+
+  <!-- 散裝 -->
+  <div id="bulk-sec" class="fsec">
+    <div class="flbl">數量（散裝）</div>
+    <div class="frow" style="margin-bottom:8px;">
+      <div class="fld"><label>單顆重量 (g)</label>
+        <input type="number" id="f-ug" placeholder="g" inputmode="decimal" oninput="calcBulk()"></div>
+      <div class="fld"><label>總重量 (kg)</label>
+        <input type="number" id="f-tkg" placeholder="kg" inputmode="decimal" oninput="calcBulk()"></div>
+    </div>
+    <div class="frow" style="margin-bottom:8px;">
+      <div class="fld"><label>自動算出總顆數</label>
+        <div class="cbox" id="c-btotal">—</div></div>
+      <div class="fld"><label>每袋（分裝）幾顆</label>
+        <input type="number" id="f-bppkg" placeholder="顆/袋" inputmode="numeric" oninput="calcBulk()"></div>
+    </div>
+    <div class="fld"><label>可分裝約幾袋</label>
+      <div class="cbox" id="c-bpkgs">—</div></div>
+  </div>
+
+  <!-- 一般包裝 -->
+  <div id="pkg-sec" class="fsec" style="display:none;">
+    <div class="flbl">數量（一般包裝）</div>
+    <div class="frow" style="margin-bottom:8px;">
+      <div class="fld"><label>包數</label>
+        <input type="number" id="f-pn" placeholder="包" inputmode="numeric" oninput="calcPkg()"></div>
+      <div class="fld"><label>每包重量 (g)</label>
+        <input type="number" id="f-pg" placeholder="g" inputmode="decimal" oninput="calcPkg()"></div>
+    </div>
+    <div class="frow">
+      <div class="fld"><label>每包約幾顆</label>
+        <input type="number" id="f-ppkg" placeholder="顆" inputmode="numeric" oninput="calcPkg()"></div>
+      <div class="fld"><label>合計重量</label>
+        <div class="cbox" id="c-pkg">—</div></div>
+    </div>
+    <div class="fld" style="margin-top:8px;"><label>合計顆數</label>
+      <div class="cbox" id="c-ptotal">—</div></div>
+  </div>
+
+  <hr class="sdiv">
+
+  <div class="fsec">
+    <div class="flbl">備注</div>
+    <div class="fld"><textarea id="f-note" placeholder="其他說明…"></textarea></div>
+  </div>
+
+  <button class="save-btn" onclick="saveRecord()">✓ 儲存</button>
+</div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  DATA MODEL
+//  records[] = parent (one per batch/lot)
+//    { id, product, issue, expDate, pkgType,
+//      totalQty (pkg=包數, bulk=袋數),
+//      unitWeight(g), totalKg, perPkgCount,
+//      totalCount, note, createdAt,
+//      arrangements: [ { id, qty, handle, recipient, note, status, createdAt } ]
+//    }
+// ─────────────────────────────────────────────
+let records = []; // loaded from Firebase
+let currentType = 'bulk';
+let editId = null;
+
+const ISSUE_S={
+  '不足重':'background:var(--red-l);color:var(--red)',
+  'NG':'background:#fdecea;color:#b03a2e',
+  '上頂白':'background:var(--yel-l);color:var(--yel)',
+  '退貨不良':'background:var(--pur-l);color:var(--pur)',
+  '新品測試':'background:var(--tea-l);color:var(--tea)',
+};
+const HANDLE_S={
+  '自送':'background:var(--green-l);color:var(--green)',
+  '寄送':'background:var(--blu-l);color:var(--blu)',
+  '暫放':'background:var(--ora-l);color:var(--ora)',
+  '自取':'background:var(--pur-l);color:var(--pur)',
+};
+
+function persist(){
+  // Save to Firebase
+  const dbRef = window._fbRef(window._fbDb, 'records');
+  window._fbSet(dbRef, records.length ? Object.fromEntries(records.map(r => [r.id, r])) : null);
+  // Also keep local copy for instant UI
+}
+
+// ─── unit label & total ───
+// pkg  → 包,  qty = integer 包數
+// bulk → kg,  qty = float kg (stored as totalKg)
+function unitLbl(r){ return r.pkgType==='pkg' ? '包' : 'kg'; }
+function parentTotal(r){
+  return r.pkgType==='pkg' ? (parseFloat(r.totalQty)||0) : (parseFloat(r.totalKg)||0);
+}
+
+// ─── arranged / done qty for a parent ───
+function calcArranged(r){
+  const arr = r.arrangements||[];
+  const arranged = arr.filter(a=>a.status==='arranged').reduce((s,a)=>s+(parseFloat(a.qty)||0),0);
+  const done     = arr.filter(a=>a.status==='done').reduce((s,a)=>s+(parseFloat(a.qty)||0),0);
+  // 'cancelled' status: not counted in arranged or done → qty returns to remaining
+  const total    = parentTotal(r);
+  return { arranged, done, remaining: Math.max(0, total - arranged - done), total };
+}
+
+// ─── expiry helpers ───
+function expCls(d){
+  if(!d) return '';
+  const diff = Math.round((new Date(d)-new Date().setHours(0,0,0,0))/86400000);
+  return diff<0?'ex':diff<=7?'es':'eo';
+}
+function expTxt(d){
+  if(!d) return '';
+  const diff = Math.round((new Date(d)-new Date().setHours(0,0,0,0))/86400000);
+  const s = d.slice(2).replace(/-/g,'/');
+  if(diff<0)  return `⚠ 已過期 ${s}`;
+  if(diff===0) return `⚠ 今天到期`;
+  if(diff<=7) return `⚠ 效期剩${diff}天 (${s})`;
+  return `效期 ${s}`;
+}
+
+// ─────────── TABS ───────────
+function goTab(tab, btn){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.getElementById('page-'+tab).classList.add('on');
+  if(tab==='overview') renderOverview();
+  if(tab==='pending')  renderPending();
+  if(tab==='arranged') renderArranged();
+  if(tab==='done')     renderDone();
+}
+
+// ─────────── OVERVIEW ───────────
+function getProductMap(){
+  const map={};
+  records.forEach(r=>{
+    if(!map[r.product]) map[r.product]={
+      name:r.product, totalQty:0, totalArranged:0, totalDone:0,
+      issues:new Set(), expDates:[], pendCount:0, arrCount:0
+    };
+    const p=map[r.product];
+    const {arranged,done,remaining,total}=calcArranged(r);
+    p.totalQty+=total;  // for bulk this is kg, for pkg this is 包數
+    p.totalArranged+=arranged;
+    p.totalDone+=done;
+    if(r.issue) p.issues.add(r.issue);
+    if(r.expDate) p.expDates.push(r.expDate);
+    if(remaining>0) p.pendCount++;
+    p.arrCount += (r.arrangements||[]).filter(a=>a.status==='arranged').length;
+  });
+  return Object.values(map);
+}
+
+function renderOverview(){
+  const products=getProductMap();
+  const el=document.getElementById('plist');
+  if(!products.length){
+    el.innerHTML=`<div class="empty"><div class="empty-ico">🥟</div>還沒有品項，點右下角新增</div>`;
+    return;
+  }
+  el.innerHTML=products.map(p=>{
+    const ulRec = records.find(r=>r.product===p.name);
+    const unit = ulRec ? unitLbl(ulRec) : '包';
+    const isBulk = ulRec?.pkgType === 'bulk';
+    const fmt = v => isBulk ? parseFloat(v).toFixed(2) : String(Math.round(v));
+    const remaining=Math.max(0,p.totalQty-p.totalArranged-p.totalDone);
+    const pct=p.totalQty>0?Math.min(100,((p.totalArranged+p.totalDone)/p.totalQty)*100):0;
+    const barCls=pct>=100?'pb-d':pct>=60?'pb-m':'pb-g';
+    const remainColor=remaining>0?'var(--red)':'var(--green)';
+    const issues=[...p.issues].map(i=>`<span class="chip" style="${ISSUE_S[i]||''}">${i}</span>`).join('');
+    let expHtml='';
+    if(p.expDates.length){
+      const near=p.expDates.sort()[0];
+      expHtml=`<span class="exp-warn ${expCls(near)}">${expTxt(near)}</span>`;
+    }
+    const sub=[
+      p.pendCount?`${p.pendCount}筆待處理`:'',
+      p.arrCount?`${p.arrCount}筆已安排`:''
+    ].filter(Boolean).join('・')||'全部完成';
+    return `
+    <div class="pc" onclick="goProd('${p.name}')">
+      <div class="pc-top">
+        <div><div class="pc-name">${p.name}</div><div class="pc-sub">${sub}</div></div>
+        <div class="kpi">
+          <div class="kpi-n" style="color:${remainColor}">${fmt(remaining)}<span style="font-size:.72rem;font-weight:600">${unit}</span></div>
+          <div class="kpi-l">待安排</div>
+        </div>
+      </div>
+      <div class="prog"><div class="prog-b ${barCls}" style="width:${pct}%"></div></div>
+      <div class="pc-stats">
+        <div class="pst t"><div class="pst-n">${fmt(p.totalQty)}</div><div class="pst-l">登記${unit}</div></div>
+        <div class="pst a"><div class="pst-n">${fmt(p.totalArranged)}</div><div class="pst-l">已安排${unit}</div></div>
+        <div class="pst d"><div class="pst-n">${fmt(p.totalDone)}</div><div class="pst-l">已完成${unit}</div></div>
+        <div class="pst r"><div class="pst-n">${fmt(remaining)}</div><div class="pst-l">剩餘${unit}</div></div>
+      </div>
+      ${issues?`<div class="chip-row">${issues}</div>`:''}
+      ${expHtml}
+    </div>`;
+  }).join('');
+}
+
+function goProd(name){
+  document.querySelector('.tab:nth-child(2)').click();
+  document.getElementById('fp-pend').value=name;
+  renderPending();
+}
+
+// ─────────── PENDING PAGE ───────────
+function updateDropdown(selId, filterFn){
+  const sel=document.getElementById(selId);
+  const cur=sel.value;
+  const names=[...new Set(records.filter(filterFn||Boolean).map(r=>r.product))].sort();
+  sel.innerHTML='<option value="">全部品項</option>'+
+    names.map(n=>`<option value="${n}"${n===cur?' selected':''}>${n}</option>`).join('');
+}
+
+function renderPending(){
+  updateDropdown('fp-pend', r=>calcArranged(r).remaining>0);
+  const pf=document.getElementById('fp-pend').value;
+  let list=records.filter(r=>calcArranged(r).remaining>0);
+  if(pf) list=list.filter(r=>r.product===pf);
+
+  const el=document.getElementById('pend-list');
+  if(!list.length){el.innerHTML=`<div class="empty"><div class="empty-ico">✅</div>沒有待處理品項</div>`;return;}
+
+  el.innerHTML=list.map(r=>{
+    const {arranged,done,remaining,total}=calcArranged(r);
+    const ul=unitLbl(r);
+    const isBulk=r.pkgType==='bulk';
+    const fmtQ=v=>isBulk?parseFloat(v).toFixed(2):Math.round(v);
+    const qHtml=buildQtyChips(r,remaining,ul);
+    const expHtml=r.expDate?`<span class="badge" style="${expCls(r.expDate)==='ex'?'background:var(--red-l);color:var(--red)':expCls(r.expDate)==='es'?'background:var(--yel-l);color:var(--yel)':'background:var(--green-l);color:var(--green)'}">${expTxt(r.expDate)}</span>`:'';
+
+    return `
+    <div class="rc pend" id="rc-${r.id}">
+      <div class="rc-top">
+        <div class="rc-name">${r.product}</div>
+        <div class="rc-btns">
+          <button class="ibt" onclick="openModal('${r.id}')">✏️</button>
+          <button class="ibt" onclick="delRec('${r.id}')" style="color:var(--red)">🗑</button>
+        </div>
+      </div>
+      <div class="badge-row">
+        ${r.issue?`<span class="badge" style="${ISSUE_S[r.issue]||''}">${r.issue}</span>`:''}
+        <span class="badge" style="background:var(--ora-l);color:var(--ora)">${r.pkgType==='pkg'?'一般包裝':'散裝'}</span>
+        ${expHtml}
+      </div>
+      <div class="qty-row">${qHtml}</div>
+      <div class="remain-bar">
+        <div class="remain-nums">
+          <span class="rn total">總計 ${fmtQ(total)}${ul}</span>
+          <span class="rn-sep">|</span>
+          ${arranged>0?`<span class="rn arr">已安排 ${fmtQ(arranged)}${ul}</span><span class="rn-sep">|</span>`:''}
+          ${done>0?`<span class="rn done">已完成 ${fmtQ(done)}${ul}</span><span class="rn-sep">|</span>`:''}
+          <span class="rn left">待安排 ${fmtQ(remaining)}${ul}</span>
+        </div>
+      </div>
+      ${r.note?`<div class="note-txt">📝 ${r.note}</div>`:''}
+      <button class="add-arr-btn" onclick="toggleArrForm('${r.id}')">＋ 新增安排</button>
+      <div id="af-${r.id}" style="display:none;">
+        ${buildArrForm(r.id, ul, remaining, isBulk)}
+      </div>
+      <div class="rc-date">建立：${r.createdAt}</div>
+    </div>`;
+  }).join('');
+}
+
+function buildQtyChips(r, remaining, ul){
+  const chips=[];
+  if(r.pkgType==='pkg'){
+    if(r.totalQty)    chips.push(`<span class="qc">共 <strong>${r.totalQty}包</strong></span>`);
+    if(r.unitWeight)  chips.push(`<span class="qc">每包 <strong>${r.unitWeight}g</strong></span>`);
+    if(r.perPkgCount) chips.push(`<span class="qc">每包約 <strong>${r.perPkgCount}顆</strong></span>`);
+    if(r.totalKg)     chips.push(`<span class="qc">共 <strong>${parseFloat(r.totalKg).toFixed(2)}kg</strong></span>`);
+    if(r.totalCount)  chips.push(`<span class="qc">約 <strong>${r.totalCount}顆</strong></span>`);
+  } else {
+    if(r.totalKg)     chips.push(`<span class="qc">共 <strong>${parseFloat(r.totalKg).toFixed(2)}kg</strong></span>`);
+    if(r.unitWeight)  chips.push(`<span class="qc">單顆 <strong>${r.unitWeight}g</strong></span>`);
+    if(r.totalCount)  chips.push(`<span class="qc">約 <strong>${r.totalCount}顆</strong></span>`);
+    if(r.perPkgCount) chips.push(`<span class="qc">每袋 <strong>${r.perPkgCount}顆</strong></span>`);
+    if(r.perPkgCount&&r.totalCount) chips.push(`<span class="qc">可分約 <strong>${Math.floor(r.totalCount/parseFloat(r.perPkgCount))}袋</strong></span>`);
+  }
+  return chips.join('');
+}
+
+function buildArrForm(rid, ul, maxQty, isBulk){
+  const step = isBulk ? '0.01' : '1';
+  const mode = isBulk ? 'decimal' : 'numeric';
+  const maxDisp = isBulk ? parseFloat(maxQty).toFixed(2) : maxQty;
+  return `
+  <div class="arr-form">
+    <div class="arr-form-title">📦 新增安排明細</div>
+    <div class="arr-frow">
+      <div class="arr-fld">
+        <label>數量（${ul}，最多${maxDisp}${ul}）</label>
+        <input type="number" id="ai-qty-${rid}" placeholder="${ul}" inputmode="${mode}" step="${step}" max="${maxQty}">
+      </div>
+      <div class="arr-fld">
+        <label>對象／收件人</label>
+        <input type="text" id="ai-recip-${rid}" placeholder="姓名或單位">
+      </div>
+    </div>
+    <div class="arr-form-title" style="margin-bottom:6px;">處理方式</div>
+    <div class="arr-tog-row" id="at-handle-${rid}">
+      <button class="arr-tog" onclick="selAt('at-handle-${rid}',this)">自送</button>
+      <button class="arr-tog" onclick="selAt('at-handle-${rid}',this)">寄送</button>
+      <button class="arr-tog" onclick="selAt('at-handle-${rid}',this)">暫放</button>
+      <button class="arr-tog" onclick="selAt('at-handle-${rid}',this)">自取</button>
+    </div>
+    <div class="arr-fld" style="margin-top:8px;">
+      <label>備注（地址、時間等）</label>
+      <textarea id="ai-note-${rid}" placeholder="可不填…"></textarea>
+    </div>
+    <button class="arr-confirm-btn" onclick="confirmArr('${rid}')">確認新增安排</button>
+  </div>`;
+}
+
+function toggleArrForm(rid){
+  const el=document.getElementById('af-'+rid);
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+
+function selAt(gid, btn){
+  document.querySelectorAll('#'+gid+' .arr-tog').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+
+function confirmArr(rid){
+  const r=records.find(x=>x.id===rid);
+  if(!r) return;
+  const isBulk=r.pkgType==='bulk';
+  const qtyEl=document.getElementById('ai-qty-'+rid);
+  const qty=isBulk?parseFloat(qtyEl.value):parseInt(qtyEl.value);
+  if(!qty||qty<=0){alert('請填寫數量');return;}
+  const {remaining}=calcArranged(r);
+  if(qty>remaining+0.001){alert(`超過剩餘數量 ${isBulk?parseFloat(remaining).toFixed(2):remaining}${unitLbl(r)}`);return;}
+  const handle=document.querySelector('#at-handle-'+rid+' .arr-tog.sel')?.textContent?.trim()||'';
+  const recip=document.getElementById('ai-recip-'+rid).value.trim();
+  const note=document.getElementById('ai-note-'+rid).value.trim();
+  if(!r.arrangements) r.arrangements=[];
+  // estimate顆 for this arrangement
+  const cntPer=parseInt(r.perPkgCount)||0;
+  const cntEst = isBulk
+    ? (r.unitWeight&&qty ? Math.round(qty*1000/parseFloat(r.unitWeight)) : 0)
+    : (cntPer ? qty*cntPer : 0);
+  r.arrangements.push({
+    id: Date.now().toString()+Math.random().toString(36).slice(2,5),
+    qty, handle, recipient:recip, note, status:'arranged', cntEst,
+    createdAt: new Date().toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})
+  });
+  persist();
+  renderPending(); renderArranged(); renderOverview();
+}
+
+// ─────────── ARRANGED PAGE ───────────
+function renderArranged(){
+  updateDropdown('fp-arr');
+  const pf=document.getElementById('fp-arr').value;
+  // collect all arranged-status arrangements with parent info
+  let items=[];
+  records.forEach(r=>{
+    (r.arrangements||[]).filter(a=>a.status==='arranged').forEach(a=>{
+      items.push({...a, parent:r});
+    });
+  });
+  if(pf) items=items.filter(x=>x.parent.product===pf);
+  items.sort((a,b)=>b.id.localeCompare(a.id));
+
+  const el=document.getElementById('arr-list');
+  if(!items.length){el.innerHTML=`<div class="empty"><div class="empty-ico">📦</div>沒有已安排的項目</div>`;return;}
+
+  el.innerHTML=items.map(a=>{
+    const r=a.parent;
+    const ul=unitLbl(r);
+    const isBulk=r.pkgType==='bulk';
+    const qtyDisp=isBulk?parseFloat(a.qty).toFixed(2):a.qty;
+    // count estimate: stored in arrangement if available, else compute
+    const cntEst=a.cntEst||(isBulk&&r.unitWeight?Math.round(a.qty*1000/parseFloat(r.unitWeight)):(parseInt(r.perPkgCount)||0)*a.qty)||0;
+    // for pkg: show kg estimate
+    const kgEst = !isBulk&&r.unitWeight ? ` ≈${(a.qty*(parseFloat(r.unitWeight)||0)/1000).toFixed(2)}kg` : '';
+
+    return `
+    <div class="sub-rc">
+      <div class="sub-rc-top">
+        <div>
+          <div class="sub-rc-prod">${r.product}</div>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:2px;">${r.pkgType==='pkg'?'一般包裝':'散裝'}${r.expDate?` ・ ${expTxt(r.expDate)}`:''}</div>
+        </div>
+        <div class="rc-btns">
+          <button class="ibt" onclick="delArr('${r.id}','${a.id}')" style="color:var(--red)">🗑</button>
+        </div>
+      </div>
+      <div class="sub-info">
+        <span class="qc"><strong>${qtyDisp}${ul}</strong>${kgEst}${cntEst?` ≈${cntEst}顆`:''}</span>
+        ${a.handle?`<span class="badge" style="${HANDLE_S[a.handle]||''}">${a.handle}</span>`:''}
+        ${a.recipient?`<span class="qc">👤 <strong>${a.recipient}</strong></span>`:''}
+      </div>
+      ${a.note?`<div class="sub-note">📝 ${a.note}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button class="sub-done-btn" style="flex:2" onclick="markArrDone('${r.id}','${a.id}')">✓ 已完成</button>
+        <button onclick="cancelArr('${r.id}','${a.id}')" style="flex:1;padding:8px;background:var(--bg);color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:.78rem;font-family:inherit;font-weight:600;cursor:pointer;">↩ 取消安排</button>
+      </div>
+      <div class="sub-date">安排時間：${a.createdAt}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─────────── DONE PAGE ───────────
+function renderDone(){
+  updateDropdown('fp-done');
+  const pf=document.getElementById('fp-done').value;
+  let items=[];
+  records.forEach(r=>{
+    (r.arrangements||[]).filter(a=>a.status==='done').forEach(a=>{
+      items.push({...a, parent:r});
+    });
+  });
+  if(pf) items=items.filter(x=>x.parent.product===pf);
+  items.sort((a,b)=>b.id.localeCompare(a.id));
+
+  const el=document.getElementById('done-list');
+  if(!items.length){el.innerHTML=`<div class="empty"><div class="empty-ico">✅</div>還沒有已完成項目</div>`;return;}
+
+  el.innerHTML=items.map(a=>{
+    const r=a.parent;
+    const ul=unitLbl(r);
+    const isBulk=r.pkgType==='bulk';
+    const qtyDisp=isBulk?parseFloat(a.qty).toFixed(2):a.qty;
+    const cntEst=a.cntEst||(isBulk&&r.unitWeight?Math.round(a.qty*1000/parseFloat(r.unitWeight)):(parseInt(r.perPkgCount)||0)*a.qty)||0;
+    const kgEst = !isBulk&&r.unitWeight ? ` ≈${(a.qty*(parseFloat(r.unitWeight)||0)/1000).toFixed(2)}kg` : '';
+    return `
+    <div class="sub-rc done">
+      <div class="sub-rc-top">
+        <div>
+          <div class="sub-rc-prod">${r.product}</div>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:2px;">${r.pkgType==='pkg'?'一般包裝':'散裝'}</div>
+        </div>
+        <button class="ibt" onclick="reopenArr('${r.id}','${a.id}')" title="重開" style="color:var(--muted)">↩</button>
+      </div>
+      <div class="sub-info">
+        <span class="qc"><strong>${qtyDisp}${ul}</strong>${kgEst}${cntEst?` ≈${cntEst}顆`:''}</span>
+        ${a.handle?`<span class="badge" style="${HANDLE_S[a.handle]||''}">${a.handle}</span>`:''}
+        ${a.recipient?`<span class="qc">👤 <strong>${a.recipient}</strong></span>`:''}
+        <span class="badge" style="background:var(--green-l);color:var(--green)">已完成</span>
+      </div>
+      ${a.note?`<div class="sub-note">📝 ${a.note}</div>`:''}
+      <div class="sub-date">安排：${a.createdAt}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─────────── ACTIONS ───────────
+function markArrDone(rid, aid){
+  const r=records.find(x=>x.id===rid);
+  if(!r) return;
+  const a=(r.arrangements||[]).find(x=>x.id===aid);
+  if(a) a.status='done';
+  persist(); renderArranged(); renderDone(); renderOverview();
+}
+
+function reopenArr(rid, aid){
+  const r=records.find(x=>x.id===rid);
+  if(!r) return;
+  const a=(r.arrangements||[]).find(x=>x.id===aid);
+  if(a) a.status='arranged';
+  persist(); renderArranged(); renderDone(); renderOverview();
+}
+
+function delArr(rid, aid){
+  if(!confirm('刪除這筆安排？')) return;
+  const r=records.find(x=>x.id===rid);
+  if(!r) return;
+  r.arrangements=(r.arrangements||[]).filter(x=>x.id!==aid);
+  persist(); renderArranged(); renderPending(); renderDone(); renderOverview();
+}
+
+function delRec(id){
+  if(!confirm('刪除整筆品項紀錄？')) return;
+  records=records.filter(r=>r.id!==id);
+  persist(); renderPending(); renderOverview();
+}
+
+// ─────────── MODAL ───────────
+function openModal(id=null){
+  editId=id;
+  resetForm();
+  renderCustomIssues();
+  const dl=document.getElementById('dl-prod');
+  dl.innerHTML=[...new Set(records.map(r=>r.product))].map(n=>`<option value="${n}">`).join('');
+  if(id){
+    const r=records.find(x=>x.id===id);
+    document.getElementById('sh-title').textContent='編輯品項';
+    document.getElementById('f-prod').value=r.product||'';
+    document.getElementById('f-note').value=r.note||'';
+    document.querySelectorAll('#tg-issue .tog').forEach(b=>b.classList.toggle('sel',b.textContent.trim()===r.issue));
+    if(r.expDate){
+      document.getElementById('has-exp').checked=true;
+      document.getElementById('exp-wrap').style.display='block';
+      document.getElementById('exp-lbl').textContent='有效期';
+      document.getElementById('f-exp').value=r.expDate;
+    }
+    swType(r.pkgType||'bulk');
+    if(r.pkgType==='bulk'){
+      document.getElementById('f-ug').value=r.unitWeight||'';
+      document.getElementById('f-tkg').value=r.totalKg||'';
+      document.getElementById('f-bppkg').value=r.perPkgCount||'';
+      calcBulk();
+    } else {
+      document.getElementById('f-pn').value=r.totalQty||'';
+      document.getElementById('f-pg').value=r.unitWeight||'';
+      document.getElementById('f-ppkg').value=r.perPkgCount||'';
+      calcPkg();
+    }
+  } else {
+    document.getElementById('sh-title').textContent='新增待處理品項';
+  }
+  document.getElementById('ov').classList.add('show');
+}
+
+function resetForm(){
+  ['f-prod','f-note','f-ug','f-tkg','f-bppkg','f-pn','f-pg','f-ppkg','f-exp'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('has-exp').checked=false;
+  document.getElementById('exp-wrap').style.display='none';
+  document.getElementById('exp-lbl').textContent='無效期';
+  ['c-btotal','c-bpkgs','c-pkg','c-ptotal'].forEach(id=>document.getElementById(id).textContent='—');
+  document.querySelectorAll('.tog').forEach(b=>b.classList.remove('sel'));
+  swType('bulk');
+}
+
+function closeOv(e){
+  if(e&&e.target!==document.getElementById('ov')) return;
+  document.getElementById('ov').classList.remove('show');
+  editId=null;
+}
+
+function swType(type){
+  currentType=type;
+  document.getElementById('tab-bulk').classList.toggle('act',type==='bulk');
+  document.getElementById('tab-pkg').classList.toggle('act',type==='pkg');
+  document.getElementById('bulk-sec').style.display=type==='bulk'?'block':'none';
+  document.getElementById('pkg-sec').style.display=type==='pkg'?'block':'none';
+}
+
+function toggleExp(){
+  const on=document.getElementById('has-exp').checked;
+  document.getElementById('exp-wrap').style.display=on?'block':'none';
+  document.getElementById('exp-lbl').textContent=on?'有效期':'無效期';
+}
+
+function sel1(gid,btn){
+  document.querySelectorAll('#'+gid+' .tog').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+
+function calcBulk(){
+  const u=parseFloat(document.getElementById('f-ug').value);
+  const kg=parseFloat(document.getElementById('f-tkg').value);
+  const ppkg=parseFloat(document.getElementById('f-bppkg').value);
+  const total=(u&&kg)?Math.round(kg*1000/u):0;
+  document.getElementById('c-btotal').textContent=total?`約 ${total} 顆`:'—';
+  // bags = total顆 / perPkgCount
+  document.getElementById('c-bpkgs').textContent=(total&&ppkg)?`約 ${Math.floor(total/ppkg)} 袋`:'—';
+}
+
+function calcPkg(){
+  const n=parseFloat(document.getElementById('f-pn').value);
+  const g=parseFloat(document.getElementById('f-pg').value);
+  const ppkg=parseFloat(document.getElementById('f-ppkg').value);
+  document.getElementById('c-pkg').textContent=(n&&g)?`共 ${(n*g/1000).toFixed(2)} kg`:'—';
+  document.getElementById('c-ptotal').textContent=(n&&ppkg)?`約 ${Math.round(n*ppkg)} 顆`:'—';
+}
+
+function saveRecord(){
+  const product=document.getElementById('f-prod').value.trim();
+  if(!product){alert('請填寫產品名稱');return;}
+  const issue=document.querySelector('#tg-issue .tog.sel')?.textContent?.trim()||'';
+  const note=document.getElementById('f-note').value.trim();
+  const hasExp=document.getElementById('has-exp').checked;
+  const expDate=hasExp?document.getElementById('f-exp').value:'';
+
+  let totalQty=0,unitWeight='',totalKg=0,perPkgCount='',totalCount=0;
+
+  if(currentType==='bulk'){
+    unitWeight=document.getElementById('f-ug').value;
+    const kg=document.getElementById('f-tkg').value;
+    perPkgCount=document.getElementById('f-bppkg').value;
+    totalKg=parseFloat(kg)||0;
+    totalQty=totalKg;  // for bulk, qty IS kg
+    totalCount=(unitWeight&&kg)?Math.round(parseFloat(kg)*1000/parseFloat(unitWeight)):0;
+  } else {
+    totalQty=parseFloat(document.getElementById('f-pn').value)||0;
+    unitWeight=document.getElementById('f-pg').value; // per-pkg weight g
+    perPkgCount=document.getElementById('f-ppkg').value;
+    totalKg=(totalQty*(parseFloat(unitWeight)||0)/1000);
+    totalCount=perPkgCount&&totalQty?Math.round(totalQty*parseFloat(perPkgCount)):0;
+  }
+
+  if(editId){
+    const idx=records.findIndex(r=>r.id===editId);
+    records[idx]={...records[idx],product,issue,note,expDate,pkgType:currentType,
+      totalQty,unitWeight,totalKg,perPkgCount,totalCount};
+  } else {
+    records.unshift({
+      id:Date.now().toString(),
+      product,issue,note,expDate,pkgType:currentType,
+      totalQty,unitWeight,totalKg,perPkgCount,totalCount,
+      arrangements:[],
+      createdAt:new Date().toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})
+    });
+  }
+  persist();
+  document.getElementById('ov').classList.remove('show');
+  editId=null;
+  renderOverview(); renderPending();
+}
+
+// ─── custom issue tags ───
+let customIssues = []; // loaded from Firebase
+
+function renderCustomIssues(){
+  const row = document.getElementById('tg-issue');
+  // remove existing custom ones first
+  row.querySelectorAll('.tog.custom').forEach(b => b.remove());
+  customIssues.forEach(label => {
+    const b = document.createElement('button');
+    b.className = 'tog custom';
+    b.textContent = label;
+    b.onclick = () => sel1('tg-issue', b);
+    // add long-press / right-click to delete
+    b.ondblclick = () => {
+      if(confirm(`刪除自訂標籤「${label}」？`)){
+        customIssues = customIssues.filter(x => x !== label);
+        const ciRef = window._fbRef(window._fbDb, 'customIssues');
+        window._fbSet(ciRef, customIssues.length ? customIssues : null);
+        renderCustomIssues();
+      }
+    };
+    row.appendChild(b);
+  });
+}
+
+function addCustomIssue(){
+  const inp = document.getElementById('f-custom-issue');
+  const val = inp.value.trim();
+  if(!val) return;
+  if(!customIssues.includes(val)){
+    customIssues.push(val);
+    const ciRef2 = window._fbRef(window._fbDb, 'customIssues');
+    window._fbSet(ciRef2, customIssues.length ? customIssues : null);
+    renderCustomIssues();
+  }
+  // auto-select the new tag
+  const row = document.getElementById('tg-issue');
+  row.querySelectorAll('.tog').forEach(b => {
+    b.classList.toggle('sel', b.textContent.trim() === val);
+  });
+  inp.value = '';
+}
+
+// ─── cancel arrangement (return to pending) ───
+function cancelArr(rid, aid){
+  if(!confirm('取消這筆安排？數量將退回待處理。')) return;
+  const r = records.find(x => x.id === rid);
+  if(!r) return;
+  const a = (r.arrangements||[]).find(x => x.id === aid);
+  if(a) a.status = 'cancelled';  // soft-delete: keep record but exclude from calcArranged
+  persist();
+  renderArranged(); renderPending(); renderOverview();
+}
+
+// ── Firebase init & realtime sync ──
+window.initFirebase = function(){
+  const db = window._fbDb;
+  // show loading state
+  document.getElementById('plist').innerHTML = '<div class="empty"><div class="empty-ico">⏳</div>連線中…</div>';
+
+  // listen to records
+  window._fbOnValue(window._fbRef(db, 'records'), snap => {
+    const data = snap.val();
+    if(data) {
+      records = Object.values(data);
+      // restore arrangements array if stored as object
+      records.forEach(r => {
+        if(r.arrangements && !Array.isArray(r.arrangements)){
+          r.arrangements = Object.values(r.arrangements);
+        } else if(!r.arrangements){
+          r.arrangements = [];
+        }
+      });
+    } else {
+      records = [];
+    }
+    renderOverview();
+    renderPending();
+    renderArranged();
+    renderDone();
+  });
+
+  // listen to customIssues
+  window._fbOnValue(window._fbRef(db, 'customIssues'), snap => {
+    const data = snap.val();
+    customIssues = data ? (Array.isArray(data) ? data : Object.values(data)) : [];
+    renderCustomIssues();
+  });
+};
+</script>
+</body>
+</html>
