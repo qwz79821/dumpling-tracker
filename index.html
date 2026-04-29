@@ -238,20 +238,23 @@ input:checked+.slider:before{transform:translateX(20px);}
 <div class="hdr">
   <div class="hdr-title">🥟 水餃待處理管理 <span id="sync-dot" style="font-size:.65rem;opacity:.7;font-weight:400;">● 同步中</span></div>
   <div class="tabs">
-    <button class="tab on"  onclick="goTab('overview',this)">品項總覽</button>
-    <button class="tab"     onclick="goTab('pending',this)">待處理</button>
+    <button class="tab on"  onclick="goTab('pending',this)">待處理</button>
     <button class="tab"     onclick="goTab('arranged',this)">已安排</button>
     <button class="tab"     onclick="goTab('done',this)">已完成</button>
   </div>
 </div>
 
-<!-- OVERVIEW -->
-<div id="page-overview" class="page on"><div id="plist"></div></div>
-
 <!-- PENDING -->
-<div id="page-pending" class="page">
+<div id="page-pending" class="page on">
+  <!-- summary bar -->
+  <div id="summary-bar" style="display:flex;gap:8px;margin-bottom:12px;"></div>
   <div class="toolbar">
     <select id="fp-pend" onchange="renderPending()"><option value="">全部品項</option></select>
+    <select id="fs-issue" onchange="renderPending()" style="flex:1;min-width:0;padding:8px 10px;border:2px solid var(--border);border-radius:8px;font-size:.82rem;font-family:inherit;background:#fff;-webkit-appearance:none;">
+      <option value="">全部狀況</option>
+      <option>不足重</option><option>NG</option><option>上頂白</option>
+      <option>退貨不良</option><option>新品測試</option>
+    </select>
   </div>
   <div id="pend-list"></div>
 </div>
@@ -475,7 +478,6 @@ function goTab(tab, btn){
   btn.classList.add('on');
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.getElementById('page-'+tab).classList.add('on');
-  if(tab==='overview') renderOverview();
   if(tab==='pending')  renderPending();
   if(tab==='arranged') renderArranged();
   if(tab==='done')     renderDone();
@@ -502,7 +504,7 @@ function getProductMap(){
   return Object.values(map);
 }
 
-function renderOverview(){
+function // renderOverview removed{
   const products=getProductMap();
   const el=document.getElementById('plist');
   if(!products.length){
@@ -563,7 +565,7 @@ function renderOverview(){
 }
 
 function goProd(name){
-  document.querySelector('.tab:nth-child(2)').click();
+  document.querySelector('.tab:nth-child(1)').click();
   document.getElementById('fp-pend').value=name;
   renderPending();
 }
@@ -580,8 +582,43 @@ function updateDropdown(selId, filterFn){
 function renderPending(){
   updateDropdown('fp-pend', r=>calcArranged(r).remaining>0);
   const pf=document.getElementById('fp-pend').value;
+  const isf=document.getElementById('fs-issue')?.value||'';
+  // update custom issue filter options
+  const issueEl=document.getElementById('fs-issue');
+  if(issueEl){
+    const presets=['不足重','NG','上頂白','退貨不良','新品測試'];
+    const existing=[...issueEl.options].map(o=>o.value);
+    customIssues.forEach(ci=>{
+      if(!existing.includes(ci)){
+        const o=document.createElement('option');
+        o.value=o.textContent=ci;
+        issueEl.appendChild(o);
+      }
+    });
+  }
   let list=records.filter(r=>calcArranged(r).remaining>0);
   if(pf) list=list.filter(r=>r.product===pf);
+  if(isf) list=list.filter(r=>r.issue===isf);
+
+  // summary bar
+  const totalRec=records.filter(r=>calcArranged(r).remaining>0).length;
+  const arrRec=(records.filter(r=>(r.arrangements||[]).some(a=>a.status==='arranged'))).length;
+  const doneRec=records.filter(r=>(r.arrangements||[]).some(a=>a.status==='done')).length;
+  const sb=document.getElementById('summary-bar');
+  if(sb) sb.innerHTML=`
+    <div style="flex:1;background:var(--card);border-radius:10px;padding:9px 6px;text-align:center;box-shadow:var(--shadow);">
+      <div style="font-size:1.1rem;font-weight:900;color:var(--ora)">${totalRec}</div>
+      <div style="font-size:.6rem;color:var(--muted)">待安排筆數</div>
+    </div>
+    <div style="flex:1;background:var(--card);border-radius:10px;padding:9px 6px;text-align:center;box-shadow:var(--shadow);">
+      <div style="font-size:1.1rem;font-weight:900;color:var(--amb)">${arrRec}</div>
+      <div style="font-size:.6rem;color:var(--muted)">已安排批次</div>
+    </div>
+    <div style="flex:1;background:var(--card);border-radius:10px;padding:9px 6px;text-align:center;box-shadow:var(--shadow);">
+      <div style="font-size:1.1rem;font-weight:900;color:var(--green)">${doneRec}</div>
+      <div style="font-size:.6rem;color:var(--muted)">已完成批次</div>
+    </div>
+  `;
 
   const el=document.getElementById('pend-list');
   if(!list.length){el.innerHTML=`<div class="empty"><div class="empty-ico">✅</div>沒有待處理品項</div>`;return;}
@@ -712,7 +749,7 @@ function confirmArr(rid){
     createdAt: new Date().toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})
   });
   persist();
-  renderPending(); renderArranged(); renderOverview();
+  renderPending(); renderArranged(); // renderOverview removed;
 }
 
 // ─────────── ARRANGED PAGE ───────────
@@ -818,7 +855,7 @@ function markArrDone(rid, aid){
   if(!r) return;
   const a=(r.arrangements||[]).find(x=>x.id===aid);
   if(a) a.status='done';
-  persist(); renderArranged(); renderDone(); renderOverview();
+  persist(); renderArranged(); renderDone();
 }
 
 function reopenArr(rid, aid){
@@ -826,7 +863,7 @@ function reopenArr(rid, aid){
   if(!r) return;
   const a=(r.arrangements||[]).find(x=>x.id===aid);
   if(a) a.status='arranged';
-  persist(); renderArranged(); renderDone(); renderOverview();
+  persist(); renderArranged(); renderDone();
 }
 
 function delArr(rid, aid){
@@ -834,13 +871,13 @@ function delArr(rid, aid){
   const r=records.find(x=>x.id===rid);
   if(!r) return;
   r.arrangements=(r.arrangements||[]).filter(x=>x.id!==aid);
-  persist(); renderArranged(); renderPending(); renderDone(); renderOverview();
+  persist(); renderArranged(); renderPending(); renderDone(); // renderOverview removed;
 }
 
 function delRec(id){
   if(!confirm('刪除整筆品項紀錄？')) return;
   records=records.filter(r=>r.id!==id);
-  persist(); renderPending(); renderOverview();
+  persist(); renderPending(); // renderOverview removed;
 }
 
 // ─────────── MODAL ───────────
@@ -970,7 +1007,7 @@ function saveRecord(){
       persist();
       document.getElementById('ov').classList.remove('show');
       editId=null;
-      renderOverview(); renderPending(); renderArranged(); renderDone();
+      // renderOverview removed; renderPending(); renderArranged(); renderDone();
       return;
     }
   } else {
@@ -998,7 +1035,6 @@ function saveRecord(){
   document.getElementById('ov').classList.remove('show');
   editId=null;
   // Render locally immediately for instant feedback
-  renderOverview();
   renderPending();
   renderArranged();
   renderDone();
@@ -1055,7 +1091,7 @@ function cancelArr(rid, aid){
   const a = (r.arrangements||[]).find(x => x.id === aid);
   if(a) a.status = 'cancelled';  // soft-delete: keep record but exclude from calcArranged
   persist();
-  renderArranged(); renderPending(); renderOverview();
+  renderArranged(); renderPending();
 }
 
 // ─── open modal pre-filled with product name ───
@@ -1070,7 +1106,7 @@ function openModalWithProduct(productName){
 window.initFirebase = function(){
   const db = window._fbDb;
   // show loading state
-  document.getElementById('plist').innerHTML = '<div class="empty"><div class="empty-ico">⏳</div>連線中…</div>';
+  document.getElementById('pend-list').innerHTML = '<div class="empty"><div class="empty-ico">⏳</div>連線中…</div>';
 
   // listen to records
   window._fbOnValue(window._fbRef(db, 'records'), snap => {
@@ -1088,7 +1124,6 @@ window.initFirebase = function(){
     } else {
       records = [];
     }
-    renderOverview();
     renderPending();
     renderArranged();
     renderDone();
