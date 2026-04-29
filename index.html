@@ -336,17 +336,23 @@ input:checked+.slider:before{transform:translateX(20px);}
     <div class="frow" style="margin-bottom:8px;">
       <div class="fld"><label>單顆重量 (g)</label>
         <input type="number" id="f-ug" placeholder="g" inputmode="decimal" oninput="calcBulk()"></div>
-      <div class="fld"><label>總重量 (kg)</label>
+      <div class="fld"><label>每包重量 (kg)</label>
         <input type="number" id="f-tkg" placeholder="kg" inputmode="decimal" oninput="calcBulk()"></div>
     </div>
     <div class="frow" style="margin-bottom:8px;">
-      <div class="fld"><label>自動算出總顆數</label>
-        <div class="cbox" id="c-btotal">—</div></div>
+      <div class="fld"><label>共幾包（自動產生多筆）</label>
+        <input type="number" id="f-bulk-bags" placeholder="包" inputmode="numeric" min="1" oninput="calcBulk()"
+          style="border-color:var(--amb);"></div>
       <div class="fld"><label>每袋（分裝）幾顆</label>
         <input type="number" id="f-bppkg" placeholder="顆/袋" inputmode="numeric" oninput="calcBulk()"></div>
     </div>
-    <div class="fld"><label>可分裝約幾袋</label>
-      <div class="cbox" id="c-bpkgs">—</div></div>
+    <div class="frow" style="margin-bottom:0;">
+      <div class="fld"><label>單包總顆數</label>
+        <div class="cbox" id="c-btotal">—</div></div>
+      <div class="fld"><label>共產生幾筆紀錄</label>
+        <div class="cbox" id="c-bpkgs" style="background:var(--amb-l);border-color:#e8c97a;color:var(--amb);">—</div></div>
+    </div>
+    <div style="font-size:.7rem;color:var(--muted);margin-top:6px;">💡 填幾包就自動建立幾筆獨立紀錄，各自安排處理</div>
   </div>
 
   <!-- 一般包裝 -->
@@ -631,11 +637,11 @@ function buildQtyChips(r, remaining, ul){
     if(r.totalKg)     chips.push(`<span class="qc">共 <strong>${parseFloat(r.totalKg).toFixed(2)}kg</strong></span>`);
     if(r.totalCount)  chips.push(`<span class="qc">約 <strong>${r.totalCount}顆</strong></span>`);
   } else {
-    if(r.totalKg)     chips.push(`<span class="qc">共 <strong>${parseFloat(r.totalKg).toFixed(2)}kg</strong></span>`);
+    if(r.bagIndex)    chips.push(`<span class="qc" style="background:var(--amb-l);color:var(--amb);font-weight:700;">第 ${r.bagIndex}/${r.bagTotal} 包</span>`);
+    if(r.totalKg)     chips.push(`<span class="qc">每包 <strong>${parseFloat(r.totalKg).toFixed(2)}kg</strong></span>`);
     if(r.unitWeight)  chips.push(`<span class="qc">單顆 <strong>${r.unitWeight}g</strong></span>`);
     if(r.totalCount)  chips.push(`<span class="qc">約 <strong>${r.totalCount}顆</strong></span>`);
     if(r.perPkgCount) chips.push(`<span class="qc">每袋 <strong>${r.perPkgCount}顆</strong></span>`);
-    if(r.perPkgCount&&r.totalCount) chips.push(`<span class="qc">可分約 <strong>${Math.floor(r.totalCount/parseFloat(r.perPkgCount))}袋</strong></span>`);
   }
   return chips.join('');
 }
@@ -875,7 +881,7 @@ function openModal(id=null){
 }
 
 function resetForm(){
-  ['f-prod','f-note','f-ug','f-tkg','f-bppkg','f-pn','f-pg','f-ppkg','f-exp'].forEach(id=>{
+  ['f-prod','f-note','f-ug','f-tkg','f-bppkg','f-bulk-bags','f-pn','f-pg','f-ppkg','f-exp'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('has-exp').checked=false;
@@ -915,10 +921,10 @@ function calcBulk(){
   const u=parseFloat(document.getElementById('f-ug').value);
   const kg=parseFloat(document.getElementById('f-tkg').value);
   const ppkg=parseFloat(document.getElementById('f-bppkg').value);
+  const bags=parseInt(document.getElementById('f-bulk-bags').value)||1;
   const total=(u&&kg)?Math.round(kg*1000/u):0;
   document.getElementById('c-btotal').textContent=total?`約 ${total} 顆`:'—';
-  // bags = total顆 / perPkgCount
-  document.getElementById('c-bpkgs').textContent=(total&&ppkg)?`約 ${Math.floor(total/ppkg)} 袋`:'—';
+  document.getElementById('c-bpkgs').textContent=bags>1?`${bags} 筆紀錄`:'1 筆紀錄';
 }
 
 function calcPkg(){
@@ -943,9 +949,30 @@ function saveRecord(){
     unitWeight=document.getElementById('f-ug').value;
     const kg=document.getElementById('f-tkg').value;
     perPkgCount=document.getElementById('f-bppkg').value;
+    const bulkBags=Math.max(1,parseInt(document.getElementById('f-bulk-bags').value)||1);
     totalKg=parseFloat(kg)||0;
-    totalQty=totalKg;  // for bulk, qty IS kg
+    totalQty=totalKg;  // for bulk, qty IS kg (per bag)
     totalCount=(unitWeight&&kg)?Math.round(parseFloat(kg)*1000/parseFloat(unitWeight)):0;
+
+    // If multiple bags, create multiple records
+    if(!editId && bulkBags>1){
+      const baseTime=Date.now();
+      for(let i=0;i<bulkBags;i++){
+        records.unshift({
+          id:(baseTime+i).toString(),
+          product,issue,note,expDate,pkgType:currentType,
+          totalQty,unitWeight,totalKg,perPkgCount,totalCount,
+          bagIndex: i+1, bagTotal: bulkBags,  // track which bag this is
+          arrangements:[],
+          createdAt:new Date().toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})
+        });
+      }
+      persist();
+      document.getElementById('ov').classList.remove('show');
+      editId=null;
+      renderOverview(); renderPending(); renderArranged(); renderDone();
+      return;
+    }
   } else {
     totalQty=parseFloat(document.getElementById('f-pn').value)||0;
     unitWeight=document.getElementById('f-pg').value; // per-pkg weight g
@@ -970,10 +997,11 @@ function saveRecord(){
   persist();
   document.getElementById('ov').classList.remove('show');
   editId=null;
-  // Render immediately with local data for instant feedback
-  // Firebase onValue will also re-render when it confirms the write
+  // Render locally immediately for instant feedback
   renderOverview();
   renderPending();
+  renderArranged();
+  renderDone();
 }
 
 // ─── custom issue tags ───
