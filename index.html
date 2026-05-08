@@ -19,8 +19,12 @@
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   window._fbDb = db; window._fbRef = ref; window._fbSet = set; window._fbOnValue = onValue;
-  function tryInit(){ if(window.initFirebase){ window.initFirebase(); } else { setTimeout(tryInit,50); } }
-  if(document.readyState==='loading'){ window.addEventListener('DOMContentLoaded',()=>setTimeout(tryInit,50)); } else { setTimeout(tryInit,50); }
+  function tryInit(){
+    if(window.initFirebase){ window.initFirebase(); } else { setTimeout(tryInit,50); }
+  }
+  if(document.readyState==='loading'){
+    window.addEventListener('DOMContentLoaded',()=>setTimeout(tryInit,50));
+  } else { setTimeout(tryInit,50); }
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;900&display=swap');
@@ -81,8 +85,8 @@ body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text
 .sub-done-btn{width:100%;padding:8px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:.8rem;font-family:inherit;font-weight:700;cursor:pointer;margin-top:6px;}
 .sub-note{font-size:.74rem;color:var(--muted);background:var(--bg);padding:5px 9px;border-radius:6px;margin-top:5px;}
 .sub-date{font-size:.65rem;color:var(--muted);margin-top:5px;}
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:flex-end;justify-content:center;}
-.overlay.show{display:flex;}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:flex-end;justify-content:center;pointer-events:none;}
+.overlay.show{display:flex;pointer-events:auto;}
 .sheet{background:var(--card);border-radius:20px 20px 0 0;padding:22px 16px 32px;width:100%;max-width:600px;max-height:93vh;overflow-y:auto;animation:up .28s ease;}
 @keyframes up{from{transform:translateY(100%);}to{transform:translateY(0);}}
 .sh-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
@@ -122,8 +126,8 @@ input:checked+.slider:before{transform:translateX(20px);}
   <div class="hdr-title">🥟 水餃待處理管理 <span class="sync">● 同步中</span></div>
   <div class="tabs">
     <button class="tab on" onclick="goTab('pending',this)">待處理</button>
-    <button class="tab"    onclick="goTab('arranged',this)">已安排</button>
-    <button class="tab"    onclick="goTab('done',this)">已完成</button>
+    <button class="tab" onclick="goTab('arranged',this)">已安排</button>
+    <button class="tab" onclick="goTab('done',this)">已完成</button>
   </div>
 </div>
 <div id="page-pending" class="page on">
@@ -208,7 +212,7 @@ input:checked+.slider:before{transform:translateX(20px);}
       <div class="fld"><label>單包顆數</label><div class="cbox" id="c-btotal">—</div></div>
       <div class="fld"><label>將產生</label><div class="cbox" id="c-bpkgs" style="background:var(--amb-l);border-color:#e8c97a;color:var(--amb);">1 筆</div></div>
     </div>
-    <div style="font-size:.69rem;color:var(--muted);margin-top:6px;">💡 填幾包就自動建立幾筆獨立紀錄，各自安排</div>
+    <div style="font-size:.69rem;color:var(--muted);margin-top:6px;">💡 填幾包就自動建立幾筆獨立紀錄</div>
   </div>
   <div id="pkg-sec" class="fsec" style="display:none;">
     <div class="flbl">數量（一般包裝）</div>
@@ -231,15 +235,12 @@ input:checked+.slider:before{transform:translateX(20px);}
 </div>
 </div>
 <script>
-let records=[];
-let customIssues=[];
-let currentType='bulk';
-let editId=null;
+let records=[],customIssues=[],currentType='bulk',editId=null;
 const ISSUE_S={'不足重':'background:var(--red-l);color:var(--red)','NG':'background:#fdecea;color:#b03a2e','上頂白':'background:var(--yel-l);color:var(--yel)','退貨不良':'background:var(--pur-l);color:var(--pur)','新品測試':'background:var(--tea-l);color:var(--tea)'};
 const HANDLE_S={'自送':'background:var(--green-l);color:var(--green)','寄送':'background:var(--blu-l);color:var(--blu)','暫放':'background:var(--ora-l);color:var(--ora)','自取':'background:var(--pur-l);color:var(--pur)'};
 
 function persist(){
-  if(!window._fbDb||!window._fbRef||!window._fbSet){return;}
+  if(!window._fbDb||!window._fbRef||!window._fbSet)return;
   try{
     const dbRef=window._fbRef(window._fbDb,'records');
     if(records.length){
@@ -250,12 +251,12 @@ function persist(){
         data[rec.id]=rec;
       });
       window._fbSet(dbRef,data);
-    } else { window._fbSet(dbRef,null); }
-  } catch(e){console.error('persist error:',e);}
+    } else {window._fbSet(dbRef,null);}
+  }catch(e){console.error('persist:',e);}
 }
 function persistIssues(){
   if(!window._fbDb||!window._fbRef||!window._fbSet)return;
-  try{const r=window._fbRef(window._fbDb,'customIssues');window._fbSet(r,customIssues.length?customIssues:null);}catch(e){}
+  try{window._fbSet(window._fbRef(window._fbDb,'customIssues'),customIssues.length?customIssues:null);}catch(e){}
 }
 function unitLbl(r){return r.pkgType==='pkg'?'包':'kg';}
 function parentTotal(r){return r.pkgType==='pkg'?(parseFloat(r.totalQty)||0):(parseFloat(r.totalKg)||0);}
@@ -268,7 +269,6 @@ function calcArranged(r){
 }
 function expCls(d){if(!d)return'';const diff=Math.round((new Date(d)-new Date().setHours(0,0,0,0))/86400000);return diff<0?'ex':diff<=7?'es':'eo';}
 function expTxt(d){if(!d)return'';const diff=Math.round((new Date(d)-new Date().setHours(0,0,0,0))/86400000);const s=d.slice(2).replace(/-/g,'/');if(diff<0)return`⚠ 已過期 ${s}`;if(diff===0)return`⚠ 今天到期`;if(diff<=7)return`⚠ 效期剩${diff}天(${s})`;return`效期 ${s}`;}
-
 function goTab(tab,btn){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.getElementById('page-'+tab).classList.add('on');
@@ -280,7 +280,6 @@ function updateDropdown(selId,filterFn){
   const names=[...new Set(records.filter(filterFn||Boolean).map(r=>r.product))].sort();
   sel.innerHTML='<option value="">全部品項</option>'+names.map(n=>`<option value="${n}"${n===cur?' selected':''}>${n}</option>`).join('');
 }
-
 function renderPending(){
   updateDropdown('fp-pend',r=>calcArranged(r).remaining>0);
   const pf=document.getElementById('fp-pend').value;
@@ -304,7 +303,7 @@ function renderPending(){
       if(r.totalKg)qHtml+=`<span class="qc">每包 <strong>${parseFloat(r.totalKg).toFixed(2)}kg</strong></span>`;
       if(r.unitWeight)qHtml+=`<span class="qc">單顆 <strong>${r.unitWeight}g</strong></span>`;
       if(r.totalCount)qHtml+=`<span class="qc">約 <strong>${r.totalCount}顆</strong></span>`;
-    } else {
+    }else{
       if(r.totalQty)qHtml+=`<span class="qc">共 <strong>${r.totalQty}包</strong></span>`;
       if(r.unitWeight)qHtml+=`<span class="qc">每包 <strong>${r.unitWeight}g</strong></span>`;
       if(r.perPkgCount)qHtml+=`<span class="qc">每包約 <strong>${r.perPkgCount}顆</strong></span>`;
@@ -313,7 +312,7 @@ function renderPending(){
     }
     const maxDisp=isBulk?parseFloat(remaining).toFixed(2):remaining;
     const step=isBulk?'0.01':'1';const mode=isBulk?'decimal':'numeric';
-    return`<div class="rc pend">
+    return `<div class="rc pend">
       <div class="rc-top"><div class="rc-name">${r.product}</div>
         <div class="rc-btns">
           <button class="ibt" onclick="openModal('${r.id}')">✏️</button>
@@ -356,14 +355,10 @@ function renderPending(){
     </div>`;
   }).join('');
 }
-
 function renderArranged(){
-  updateDropdown('fp-arr');
-  const pf=document.getElementById('fp-arr').value;
-  let items=[];
-  records.forEach(r=>(r.arrangements||[]).filter(a=>a.status==='arranged').forEach(a=>items.push({...a,parent:r})));
-  if(pf)items=items.filter(x=>x.parent.product===pf);
-  items.sort((a,b)=>b.id.localeCompare(a.id));
+  updateDropdown('fp-arr');const pf=document.getElementById('fp-arr').value;
+  let items=[];records.forEach(r=>(r.arrangements||[]).filter(a=>a.status==='arranged').forEach(a=>items.push({...a,parent:r})));
+  if(pf)items=items.filter(x=>x.parent.product===pf);items.sort((a,b)=>b.id.localeCompare(a.id));
   const el=document.getElementById('arr-list');
   if(!items.length){el.innerHTML='<div class="empty"><div class="empty-ico">📦</div>沒有已安排的項目</div>';return;}
   el.innerHTML=items.map(a=>{
@@ -390,14 +385,10 @@ function renderArranged(){
     </div>`;
   }).join('');
 }
-
 function renderDone(){
-  updateDropdown('fp-done');
-  const pf=document.getElementById('fp-done').value;
-  let items=[];
-  records.forEach(r=>(r.arrangements||[]).filter(a=>a.status==='done').forEach(a=>items.push({...a,parent:r})));
-  if(pf)items=items.filter(x=>x.parent.product===pf);
-  items.sort((a,b)=>b.id.localeCompare(a.id));
+  updateDropdown('fp-done');const pf=document.getElementById('fp-done').value;
+  let items=[];records.forEach(r=>(r.arrangements||[]).filter(a=>a.status==='done').forEach(a=>items.push({...a,parent:r})));
+  if(pf)items=items.filter(x=>x.parent.product===pf);items.sort((a,b)=>b.id.localeCompare(a.id));
   const el=document.getElementById('done-list');
   if(!items.length){el.innerHTML='<div class="empty"><div class="empty-ico">✅</div>還沒有已完成項目</div>';return;}
   el.innerHTML=items.map(a=>{
@@ -421,7 +412,6 @@ function renderDone(){
     </div>`;
   }).join('');
 }
-
 function toggleArrForm(rid){const el=document.getElementById('af-'+rid);el.style.display=el.style.display==='none'?'block':'none';}
 function selAt(gid,btn){document.querySelectorAll('#'+gid+' .arr-tog').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
 function confirmArr(rid){
@@ -444,13 +434,14 @@ function reopenArr(rid,aid){const r=records.find(x=>x.id===rid);if(!r)return;con
 function cancelArr(rid,aid){if(!confirm('取消這筆安排？數量將退回待處理。'))return;const r=records.find(x=>x.id===rid);if(!r)return;const a=(r.arrangements||[]).find(x=>x.id===aid);if(a)a.status='cancelled';persist();renderArranged();renderPending();}
 function delArr(rid,aid){if(!confirm('刪除這筆安排？'))return;const r=records.find(x=>x.id===rid);if(!r)return;r.arrangements=(r.arrangements||[]).filter(x=>x.id!==aid);persist();renderArranged();renderPending();}
 function delRec(id){if(!confirm('刪除整筆品項紀錄？'))return;records=records.filter(r=>r.id!==id);persist();renderPending();}
-
 function openModal(id=null){
-  editId=id;resetForm();renderCustomIssues();
+  editId=id;
+  try{resetForm();}catch(e){console.error('resetForm:',e);}
+  try{renderCustomIssues();}catch(e){}
   const dl=document.getElementById('dl-prod');
-  dl.innerHTML=[...new Set(records.map(r=>r.product))].map(n=>`<option value="${n}">`).join('');
+  if(dl)dl.innerHTML=[...new Set(records.map(r=>r.product))].map(n=>`<option value="${n}">`).join('');
   if(id){
-    const r=records.find(x=>x.id===id);
+    const r=records.find(x=>x.id===id);if(!r)return;
     document.getElementById('sh-title').textContent='編輯品項';
     document.getElementById('f-prod').value=r.product||'';
     document.getElementById('f-note').value=r.note||'';
@@ -459,30 +450,36 @@ function openModal(id=null){
     swType(r.pkgType||'bulk');
     if(r.pkgType==='bulk'){document.getElementById('f-ug').value=r.unitWeight||'';document.getElementById('f-tkg').value=r.totalKg||'';document.getElementById('f-bppkg').value=r.perPkgCount||'';calcBulk();}
     else{document.getElementById('f-pn').value=r.totalQty||'';document.getElementById('f-pg').value=r.unitWeight||'';document.getElementById('f-ppkg').value=r.perPkgCount||'';calcPkg();}
-  } else {document.getElementById('sh-title').textContent='新增待處理品項';}
+  }else{document.getElementById('sh-title').textContent='新增待處理品項';}
   document.getElementById('ov').classList.add('show');
 }
 function resetForm(){
   ['f-prod','f-note','f-ug','f-tkg','f-bppkg','f-bulk-bags','f-pn','f-pg','f-ppkg','f-exp'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const bags=document.getElementById('f-bulk-bags');if(bags)bags.value='1';
-  document.getElementById('has-exp').checked=false;document.getElementById('exp-wrap').style.display='none';document.getElementById('exp-lbl').textContent='無效期';
+  document.getElementById('has-exp').checked=false;
+  document.getElementById('exp-wrap').style.display='none';
+  document.getElementById('exp-lbl').textContent='無效期';
   ['c-btotal','c-bpkgs','c-pkg','c-ptotal'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='—';});
   document.getElementById('c-bpkgs').textContent='1 筆';
-  document.querySelectorAll('.tog').forEach(b=>b.classList.remove('sel'));swType('bulk');
+  document.querySelectorAll('.tog').forEach(b=>b.classList.remove('sel'));
+  swType('bulk');
 }
 function closeOv(e){if(e&&e.target!==document.getElementById('ov'))return;document.getElementById('ov').classList.remove('show');editId=null;}
 function swType(type){currentType=type;document.getElementById('tab-bulk').classList.toggle('act',type==='bulk');document.getElementById('tab-pkg').classList.toggle('act',type==='pkg');document.getElementById('bulk-sec').style.display=type==='bulk'?'block':'none';document.getElementById('pkg-sec').style.display=type==='pkg'?'block':'none';}
 function toggleExp(){const on=document.getElementById('has-exp').checked;document.getElementById('exp-wrap').style.display=on?'block':'none';document.getElementById('exp-lbl').textContent=on?'有效期':'無效期';}
 function sel1(gid,btn){document.querySelectorAll('#'+gid+' .tog').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
 function calcBulk(){
-  const u=parseFloat(document.getElementById('f-ug').value);const kg=parseFloat(document.getElementById('f-tkg').value);
+  const u=parseFloat(document.getElementById('f-ug').value);
+  const kg=parseFloat(document.getElementById('f-tkg').value);
   const bags=Math.max(1,parseInt(document.getElementById('f-bulk-bags').value)||1);
   const total=(u&&kg)?Math.round(kg*1000/u):0;
   document.getElementById('c-btotal').textContent=total?`約 ${total} 顆`:'—';
   document.getElementById('c-bpkgs').textContent=bags>1?`${bags} 筆`:'1 筆';
 }
 function calcPkg(){
-  const n=parseFloat(document.getElementById('f-pn').value);const g=parseFloat(document.getElementById('f-pg').value);const ppkg=parseFloat(document.getElementById('f-ppkg').value);
+  const n=parseFloat(document.getElementById('f-pn').value);
+  const g=parseFloat(document.getElementById('f-pg').value);
+  const ppkg=parseFloat(document.getElementById('f-ppkg').value);
   document.getElementById('c-pkg').textContent=(n&&g)?`共 ${(n*g/1000).toFixed(2)} kg`:'—';
   document.getElementById('c-ptotal').textContent=(n&&ppkg)?`約 ${Math.round(n*ppkg)} 顆`:'—';
 }
@@ -490,11 +487,13 @@ function saveRecord(){
   const product=document.getElementById('f-prod').value.trim();if(!product){alert('請填寫產品名稱');return;}
   const issue=document.querySelector('#tg-issue .tog.sel')?.textContent?.trim()||'';
   const note=document.getElementById('f-note').value.trim();
-  const hasExp=document.getElementById('has-exp').checked;const expDate=hasExp?document.getElementById('f-exp').value:'';
+  const hasExp=document.getElementById('has-exp').checked;
+  const expDate=hasExp?document.getElementById('f-exp').value:'';
   const now=new Date().toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
   let totalQty=0,unitWeight='',totalKg=0,perPkgCount='',totalCount=0;
   if(currentType==='bulk'){
-    unitWeight=document.getElementById('f-ug').value;const kg=document.getElementById('f-tkg').value;
+    unitWeight=document.getElementById('f-ug').value;
+    const kg=document.getElementById('f-tkg').value;
     perPkgCount=document.getElementById('f-bppkg').value;
     const bulkBags=Math.max(1,parseInt(document.getElementById('f-bulk-bags').value)||1);
     totalKg=parseFloat(kg)||0;totalQty=totalKg;
@@ -502,42 +501,55 @@ function saveRecord(){
     if(!editId&&bulkBags>1){
       const baseTime=Date.now();
       for(let i=0;i<bulkBags;i++){records.unshift({id:(baseTime+i).toString(),product,issue,note,expDate,pkgType:'bulk',totalQty,unitWeight,totalKg,perPkgCount,totalCount,bagIndex:i+1,bagTotal:bulkBags,arrangements:[],createdAt:now});}
-      persist();document.getElementById('ov').classList.remove('show');editId=null;renderPending();renderArranged();renderDone();return;
+      persist();document.getElementById('ov').classList.remove('show');editId=null;
+      renderPending();renderArranged();renderDone();return;
     }
-  } else {
-    totalQty=parseFloat(document.getElementById('f-pn').value)||0;unitWeight=document.getElementById('f-pg').value;
-    perPkgCount=document.getElementById('f-ppkg').value;totalKg=(totalQty*(parseFloat(unitWeight)||0)/1000);
+  }else{
+    totalQty=parseFloat(document.getElementById('f-pn').value)||0;
+    unitWeight=document.getElementById('f-pg').value;
+    perPkgCount=document.getElementById('f-ppkg').value;
+    totalKg=(totalQty*(parseFloat(unitWeight)||0)/1000);
     totalCount=perPkgCount&&totalQty?Math.round(totalQty*parseFloat(perPkgCount)):0;
   }
   if(editId){const idx=records.findIndex(r=>r.id===editId);records[idx]={...records[idx],product,issue,note,expDate,pkgType:currentType,totalQty,unitWeight,totalKg,perPkgCount,totalCount};}
   else{records.unshift({id:Date.now().toString(),product,issue,note,expDate,pkgType:currentType,totalQty,unitWeight,totalKg,perPkgCount,totalCount,arrangements:[],createdAt:now});}
-  persist();document.getElementById('ov').classList.remove('show');editId=null;renderPending();renderArranged();renderDone();
+  persist();document.getElementById('ov').classList.remove('show');editId=null;
+  renderPending();renderArranged();renderDone();
 }
 function renderCustomIssues(){
-  const row=document.getElementById('tg-issue');row.querySelectorAll('.tog.custom').forEach(b=>b.remove());
+  const row=document.getElementById('tg-issue');if(!row)return;
+  row.querySelectorAll('.tog.custom').forEach(b=>b.remove());
   customIssues.forEach(label=>{
     const b=document.createElement('button');b.className='tog custom';b.textContent=label;
     b.onclick=()=>sel1('tg-issue',b);
-    b.ondblclick=()=>{if(confirm(`刪除自訂標籤「${label}」？`)){customIssues=customIssues.filter(x=>x!==label);persistIssues();renderCustomIssues();}};
+    b.ondblclick=()=>{if(confirm(`刪除「${label}」？`)){customIssues=customIssues.filter(x=>x!==label);persistIssues();renderCustomIssues();}};
     row.appendChild(b);
   });
 }
 function addCustomIssue(){
   const inp=document.getElementById('f-custom-issue');const val=inp.value.trim();if(!val)return;
   if(!customIssues.includes(val)){customIssues.push(val);persistIssues();renderCustomIssues();}
-  document.querySelectorAll('#tg-issue .tog').forEach(b=>b.classList.toggle('sel',b.textContent.trim()===val));inp.value='';
+  document.querySelectorAll('#tg-issue .tog').forEach(b=>b.classList.toggle('sel',b.textContent.trim()===val));
+  inp.value='';
 }
-window.initFirebase=function(){
+window.initFirebase = function(){
   const db=window._fbDb;
   document.getElementById('pend-list').innerHTML='<div class="empty"><div class="empty-ico">⏳</div>連線中…</div>';
   window._fbOnValue(window._fbRef(db,'records'),snap=>{
     const data=snap.val();
-    if(data){records=Object.values(data);records.forEach(r=>{if(r.arrangements&&!Array.isArray(r.arrangements)){r.arrangements=Object.values(r.arrangements);}else if(!r.arrangements){r.arrangements=[];}});}
-    else{records=[];}
+    if(data){
+      records=Object.values(data);
+      records.forEach(r=>{
+        if(r.arrangements&&!Array.isArray(r.arrangements)){r.arrangements=Object.values(r.arrangements);}
+        else if(!r.arrangements){r.arrangements=[];}
+      });
+    }else{records=[];}
     renderPending();renderArranged();renderDone();
   });
   window._fbOnValue(window._fbRef(db,'customIssues'),snap=>{
-    const data=snap.val();customIssues=data?(Array.isArray(data)?data:Object.values(data)):[];renderCustomIssues();
+    const data=snap.val();
+    customIssues=data?(Array.isArray(data)?data:Object.values(data)):[];
+    renderCustomIssues();
   });
 };
 </script>
