@@ -40,7 +40,7 @@ if(document.readyState==='loading'){
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
 .hdr{background:var(--red);padding:14px 16px 0;position:sticky;top:0;z-index:50;}
-.hdr-title{color:#fff;font-size:1.05rem;font-weight:900;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.hdr-title{color:#fff;font-size:1.05rem;font-weight:900;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;gap:8px;width:100%;}
 .sync{font-size:.62rem;font-weight:400;opacity:.7;}
 .tabs{display:flex;}
 .tab{flex:1;padding:9px 2px;background:transparent;border:none;color:rgba(255,255,255,.6);font-size:.76rem;font-family:inherit;font-weight:600;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s;}
@@ -124,7 +124,7 @@ input:checked+.slider:before{transform:translateX(20px);}
 </head>
 <body>
 <div class="hdr">
-<div class="hdr-title">🥟 水餃待處理管理 <span class="sync" id="sync-status">● 連線中…</span></div>
+<div class="hdr-title">🥟 水餃待處理管理 <span class="sync" id="sync-status">● 連線中…</span> <button onclick="window.reloadAll&&window.reloadAll()" style="margin-left:auto;background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 10px;font-size:.7rem;font-family:inherit;cursor:pointer;">🔄 重新整理</button></div>
 <div class="tabs">
 <button class="tab on" onclick="goTab('pending',this)">待處理</button>
 <button class="tab" onclick="goTab('arranged',this)">已安排</button>
@@ -295,20 +295,22 @@ function recordFromDb(row){
 
 // ============= Supabase 寫入單筆 =============
 async function saveOne(r){
-  if(!window._sb)return;
+  if(!window._sb)return false;
   try{
     const dbRow=recordToDb(r);
     const {error}=await window._sb.from('dt_records').upsert(dbRow);
-    if(error)console.error('saveOne error:',error);
-  }catch(e){console.error('saveOne:',e);}
+    if(error){console.error('saveOne error:',error);alert('儲存失敗:'+(error.message||JSON.stringify(error)));return false;}
+    return true;
+  }catch(e){console.error('saveOne:',e);alert('儲存失敗(網路):'+e.message);return false;}
 }
 
 async function deleteOne(id){
-  if(!window._sb)return;
+  if(!window._sb)return false;
   try{
     const {error}=await window._sb.from('dt_records').delete().eq('id',id);
-    if(error)console.error('deleteOne error:',error);
-  }catch(e){console.error('deleteOne:',e);}
+    if(error){console.error('deleteOne error:',error);alert('刪除失敗:'+(error.message||JSON.stringify(error)));return false;}
+    return true;
+  }catch(e){console.error('deleteOne:',e);alert('刪除失敗:'+e.message);return false;}
 }
 
 async function persistIssues(){
@@ -494,13 +496,15 @@ async function confirmArr(rid){
   const cntEst=isBulk&&r.unitWeight?Math.round(qty*1000/parseFloat(r.unitWeight)):(parseInt(r.perPkgCount)||0)*qty;
   if(!r.arrangements)r.arrangements=[];
   r.arrangements.push({id:Date.now().toString()+Math.random().toString(36).slice(2,5),qty,handle,recipient:recip,note,status:'arranged',cntEst,createdAt:new Date().toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})});
-  await saveOne(r);renderPending();renderArranged();
+  await saveOne(r);
+  await reloadAll();
+  renderPending();renderArranged();
 }
-async function markArrDone(rid,aid){const r=records.find(x=>x.id===rid);if(!r)return;const a=(r.arrangements||[]).find(x=>x.id===aid);if(a)a.status='done';await saveOne(r);renderArranged();renderDone();}
-async function reopenArr(rid,aid){const r=records.find(x=>x.id===rid);if(!r)return;const a=(r.arrangements||[]).find(x=>x.id===aid);if(a)a.status='arranged';await saveOne(r);renderArranged();renderDone();}
-async function cancelArr(rid,aid){if(!confirm('取消這筆安排？數量將退回待處理。'))return;const r=records.find(x=>x.id===rid);if(!r)return;const a=(r.arrangements||[]).find(x=>x.id===aid);if(a)a.status='cancelled';await saveOne(r);renderArranged();renderPending();}
-async function delArr(rid,aid){if(!confirm('刪除這筆安排？'))return;const r=records.find(x=>x.id===rid);if(!r)return;r.arrangements=(r.arrangements||[]).filter(x=>x.id!==aid);await saveOne(r);renderArranged();renderPending();}
-async function delRec(id){if(!confirm('刪除整筆品項紀錄？'))return;records=records.filter(r=>r.id!==id);await deleteOne(id);renderPending();}
+async function markArrDone(rid,aid){const r=records.find(x=>x.id===rid);if(!r)return;const a=(r.arrangements||[]).find(x=>x.id===aid);if(a)a.status='done';await saveOne(r);await reloadAll();renderArranged();renderDone();}
+async function reopenArr(rid,aid){const r=records.find(x=>x.id===rid);if(!r)return;const a=(r.arrangements||[]).find(x=>x.id===aid);if(a)a.status='arranged';await saveOne(r);await reloadAll();renderArranged();renderDone();}
+async function cancelArr(rid,aid){if(!confirm('取消這筆安排？數量將退回待處理。'))return;const r=records.find(x=>x.id===rid);if(!r)return;const a=(r.arrangements||[]).find(x=>x.id===aid);if(a)a.status='cancelled';await saveOne(r);await reloadAll();renderArranged();renderPending();}
+async function delArr(rid,aid){if(!confirm('刪除這筆安排？'))return;const r=records.find(x=>x.id===rid);if(!r)return;r.arrangements=(r.arrangements||[]).filter(x=>x.id!==aid);await saveOne(r);await reloadAll();renderArranged();renderPending();}
+async function delRec(id){if(!confirm('刪除整筆品項紀錄？'))return;records=records.filter(r=>r.id!==id);await deleteOne(id);await reloadAll();renderPending();}
 function openModal(id=null){
   editId=id;
   try{resetForm();}catch(e){console.error('resetForm:',e);}
@@ -574,6 +578,7 @@ async function saveRecord(){
         newRecs.push(rec);
       }
       for(const rec of newRecs){await saveOne(rec);}
+      await reloadAll();
       document.getElementById('ov').classList.remove('show');editId=null;
       renderPending();renderArranged();renderDone();return;
     }
@@ -588,6 +593,7 @@ async function saveRecord(){
   if(editId){const idx=records.findIndex(r=>r.id===editId);records[idx]={...records[idx],product,issue,note,expDate,pkgType:currentType,totalQty,unitWeight,totalKg,perPkgCount,totalCount};saved=records[idx];}
   else{saved={id:Date.now().toString(),product,issue,note,expDate,pkgType:currentType,totalQty,unitWeight,totalKg,perPkgCount,totalCount,arrangements:[],createdAt:now};records.unshift(saved);}
   await saveOne(saved);
+  await reloadAll();
   document.getElementById('ov').classList.remove('show');editId=null;
   renderPending();renderArranged();renderDone();
 }
@@ -609,39 +615,44 @@ async function addCustomIssue(){
 }
 
 // ============= Supabase 初始化:讀資料 + 即時同步 =============
+async function reloadAll(){
+  if(!window._sb)return;
+  const sb=window._sb;
+  const {data:recs,error:e1}=await sb.from('dt_records').select('*');
+  if(e1){console.error('load records:',e1);document.getElementById('sync-status').textContent='● 連線失敗';return;}
+  records=(recs||[]).map(recordFromDb);
+  records.sort((a,b)=>(b.id||'').localeCompare(a.id||''));
+
+  const {data:issues,error:e2}=await sb.from('dt_custom_issues').select('label');
+  if(e2)console.error('load issues:',e2);
+  customIssues=(issues||[]).map(x=>x.label);
+
+  renderPending();renderArranged();renderDone();renderCustomIssues();
+  document.getElementById('sync-status').textContent='● 同步中';
+}
+window.reloadAll=reloadAll;
+
 window.initSupabase = async function(){
   const sb=window._sb;
   document.getElementById('pend-list').innerHTML='<div class="empty"><div class="empty-ico">⏳</div>連線中…</div>';
   document.getElementById('sync-status').textContent='● 連線中…';
 
-  async function loadAll(){
-    const {data:recs,error:e1}=await sb.from('dt_records').select('*');
-    if(e1){console.error('load records:',e1);document.getElementById('sync-status').textContent='● 連線失敗';return;}
-    records=(recs||[]).map(recordFromDb);
-    records.sort((a,b)=>(b.id||'').localeCompare(a.id||''));
+  await reloadAll();
 
-    const {data:issues,error:e2}=await sb.from('dt_custom_issues').select('label');
-    if(e2)console.error('load issues:',e2);
-    customIssues=(issues||[]).map(x=>x.label);
+  // 訂閱即時更新(若 Supabase realtime 失常會自動忽略,不影響功能)
+  try{
+    sb.channel('dt_records_realtime')
+      .on('postgres_changes',{event:'*',schema:'public',table:'dt_records'},payload=>{
+        reloadAll();
+      })
+      .subscribe();
 
-    renderPending();renderArranged();renderDone();renderCustomIssues();
-    document.getElementById('sync-status').textContent='● 同步中';
-  }
-
-  await loadAll();
-
-  // 訂閱即時更新
-  sb.channel('dt_records_realtime')
-    .on('postgres_changes',{event:'*',schema:'public',table:'dt_records'},payload=>{
-      loadAll();
-    })
-    .subscribe();
-
-  sb.channel('dt_custom_issues_realtime')
-    .on('postgres_changes',{event:'*',schema:'public',table:'dt_custom_issues'},payload=>{
-      loadAll();
-    })
-    .subscribe();
+    sb.channel('dt_custom_issues_realtime')
+      .on('postgres_changes',{event:'*',schema:'public',table:'dt_custom_issues'},payload=>{
+        reloadAll();
+      })
+      .subscribe();
+  }catch(e){console.warn('realtime 訂閱失敗,改用手動同步:',e);}
 };
 </script>
 </body>
